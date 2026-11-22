@@ -1,0 +1,7 @@
+# Never upload secrets or local state with `vercel deploy`.
+*key*.json
+.env*
+!.env.example
+.data
+.next
+node_modules

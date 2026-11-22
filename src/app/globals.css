@@ -1,0 +1,168 @@
+@import "tailwindcss";
+
+:root {
+  --porcelain: #eef1f6;
+  --surface: #ffffff;
+  --ink: #172033;
+  --muted: #5b6680;
+  --line: #d5dbe6;
+  --cobalt: #2f45d8;
+  --cobalt-deep: #2236b5;
+  --cobalt-soft: #dde2fb;
+  --marigold: #f2b33d;
+  --gain: #0f8a5f;
+  --loss: #c2412d;
+}
+
+@theme inline {
+  --color-porcelain: var(--porcelain);
+  --color-surface: var(--surface);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-cobalt: var(--cobalt);
+  --color-cobalt-deep: var(--cobalt-deep);
+  --color-cobalt-soft: var(--cobalt-soft);
+  --color-marigold: var(--marigold);
+  --color-gain: var(--gain);
+  --color-loss: var(--loss);
+  --font-display: var(--font-bricolage);
+  --font-sans: var(--font-schibsted);
+}
+
+html {
+  background: var(--porcelain);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  font-family: var(--font-schibsted), system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.55;
+  min-height: 100dvh;
+}
+
+.font-display {
+  font-family: var(--font-bricolage), system-ui, sans-serif;
+  font-optical-sizing: auto;
+  letter-spacing: -0.02em;
+}
+
+.num {
+  font-variant-numeric: lining-nums;
+}
+
+:focus-visible {
+  outline: 2.5px solid var(--cobalt);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* Component classes live in a layer so Tailwind utilities (px-4, pl-9…) can override them. */
+@layer components {
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 999px;
+  padding: 0.7rem 1.25rem;
+  font-weight: 600;
+  line-height: 1.1;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  white-space: nowrap;
+}
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.btn-primary {
+  background: var(--cobalt);
+  color: #fff;
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--cobalt-deep);
+}
+.btn-quiet {
+  background: transparent;
+  color: var(--ink);
+  border: 1.5px solid var(--line);
+}
+.btn-quiet:hover:not(:disabled) {
+  border-color: var(--ink);
+}
+.btn-danger {
+  background: transparent;
+  color: var(--loss);
+  border: 1.5px solid color-mix(in srgb, var(--loss) 35%, transparent);
+}
+.btn-danger:hover:not(:disabled) {
+  border-color: var(--loss);
+}
+
+.field {
+  width: 100%;
+  border: 1.5px solid var(--line);
+  background: var(--surface);
+  border-radius: 12px;
+  padding: 0.7rem 0.9rem;
+  color: var(--ink);
+}
+.field:focus {
+  outline: none;
+  border-color: var(--cobalt);
+  box-shadow: 0 0 0 3px var(--cobalt-soft);
+}
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+}
+}
+
+/* The jar's liquid rises once on load; the surface wave keeps a slow drift. */
+@keyframes jar-rise {
+  from {
+    transform: translateY(var(--rise-from));
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+@keyframes jar-wave {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-60px); /* one wave period in jar units */
+  }
+}
+.jar-liquid {
+  animation: jar-rise 1.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.jar-wave {
+  animation: jar-wave 7s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.spinner {
+  width: 1rem;
+  height: 1rem;
+  border-radius: 999px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  animation: spin 0.7s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .jar-liquid,
+  .jar-wave {
+    animation: none;
+  }
+}

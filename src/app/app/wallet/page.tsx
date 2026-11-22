@@ -1,0 +1,93 @@
+import QRCode from "qrcode";
+import { CopyButton } from "@/components/AppNav";
+import { requireUser } from "@/lib/auth";
+import { latestPrices, solanaAssets, fundingAsset } from "@/lib/catalog";
+import { getBalances, type TmBalance } from "@/lib/tm";
+import { qty, usd } from "@/lib/format";
+
+export const metadata = { title: "Wallet" };
+
+export default async function WalletPage() {
+  const user = await requireUser();
+  if (!user.solana_address || !user.tm_user_id) {
+    return (
+      <div className="panel max-w-xl p-6">
+        <h1 className="font-display text-3xl font-bold">Your wallet is being set up</h1>
+        <p className="mt-2 text-muted">This usually takes a few seconds. Refresh the page to check again.</p>
+      </div>
+    );
+  }
+
+  const [qr, balances, assets, usdc] = await Promise.all([
+    QRCode.toString(user.solana_address, { type: "svg", margin: 1, color: { dark: "#172033", light: "#ffffff" } }),
+    getBalances(user.tm_user_id).then((r) => r.data).catch((): TmBalance[] | null => null),
+    solanaAssets().catch(() => []),
+    fundingAsset().catch(() => undefined),
+  ]);
+  const byId = new Map(assets.map((a) => [a.id, a]));
+  const held = (balances ?? []).filter((b) => Number(b.total) > 0);
+  const prices = await latestPrices(held.map((b) => byId.get(b.asset_id)?.economic_asset_id).filter(Boolean) as string[]);
+  const rows = held
+    .map((b) => {
+      const a = byId.get(b.asset_id);
+      const isCash = (usdc && b.asset_id === usdc.id) || b.symbol === "USDC";
+      const p = isCash ? 1 : a ? prices.get(a.economic_asset_id) ?? null : null;
+      return { ...b, name: isCash ? "US Dollar Coin (cash)" : a?.name ?? b.symbol, value: p !== null ? Number(b.total) * p : null, isCash };
+    })
+    .sort((x, y) => Number(y.isCash) - Number(x.isCash) || (y.value ?? 0) - (x.value ?? 0));
+
+  return (
+    <div className="space-y-8">
+      <h1 className="font-display text-4xl font-bold">Wallet</h1>
+
+      <section className="panel grid gap-6 p-6 md:grid-cols-[auto_1fr] md:items-center">
+        <div className="mx-auto w-48 rounded-xl border border-line p-2" dangerouslySetInnerHTML={{ __html: qr }} aria-label="QR code of your Solana address" role="img" />
+        <div className="min-w-0">
+          <h2 className="font-display text-2xl font-semibold">Add cash</h2>
+          <p className="mt-2 max-w-prose text-muted">
+            Send <strong className="text-ink">USDC</strong> on the <strong className="text-ink">Solana</strong> network to this address. USDC sent on any other network
+            won&apos;t arrive. Network fees for trades are covered.
+          </p>
+          <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl bg-porcelain px-4 py-3">
+            <code className="num min-w-0 break-all text-sm">{user.solana_address}</code>
+            <CopyButton text={user.solana_address} label="Copy address" />
+          </div>
+          <p className="mt-3 text-sm text-muted">
+            This wallet is yours alone. Trades need approval from both Jarful and True Markets, so neither can move funds without the other.
+          </p>
+        </div>
+      </section>
+
+      <section className="panel p-6">
+        <h2 className="font-display text-2xl font-semibold">What&apos;s in it</h2>
+        {balances === null ? (
+          <p className="mt-2 text-muted">Balances aren&apos;t available right now. Refresh in a minute.</p>
+        ) : rows.length === 0 ? (
+          <p className="mt-2 text-muted">Nothing yet. Once your USDC arrives it shows up here as cash.</p>
+        ) : (
+          <table className="mt-4 w-full text-left">
+            <thead className="text-sm text-muted">
+              <tr>
+                <th className="pb-2 font-medium">Asset</th>
+                <th className="pb-2 text-right font-medium">Amount</th>
+                <th className="pb-2 text-right font-medium">Value</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-line">
+              {rows.map((r) => (
+                <tr key={r.asset_id}>
+                  <td className="py-3">
+                    <div className="font-medium">{r.name}</div>
+                    {Number(r.available) < Number(r.total) && <div className="text-xs text-muted">{qty(Number(r.available))} available</div>}
+                  </td>
+                  <td className="num py-3 text-right">{qty(Number(r.total), r.symbol)}</td>
+                  <td className="num py-3 text-right font-semibold">{usd(r.value)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
+    </div>
+  );
+}
