@@ -100,6 +100,10 @@ const MIGRATIONS = [
      updated_at  timestamptz NOT NULL DEFAULT now()
    )`,
   `CREATE INDEX IF NOT EXISTS contributions_goal_idx ON contributions(goal_id, created_at DESC)`,
+  // Demo accounts: simulated cash, no Gateway user, deleted after a day.
+  `ALTER TABLE users ADD COLUMN IF NOT EXISTS is_demo boolean NOT NULL DEFAULT false`,
+  `ALTER TABLE users ADD COLUMN IF NOT EXISTS demo_cash numeric`,
+  `CREATE INDEX IF NOT EXISTS users_demo_idx ON users(created_at) WHERE is_demo`,
 ];
 
 async function migrate(engine: Engine) {

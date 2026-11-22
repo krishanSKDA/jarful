@@ -27,7 +27,9 @@ export function ContributePanel({
   suggested,
   minOrder,
   maxOrder,
+  demo = false,
 }: {
+  demo?: boolean;
   goalId: string;
   assetId: string;
   symbol: string;
@@ -95,7 +97,8 @@ export function ContributePanel({
     if (c.status === "failed" || c.status === "canceled") {
       setPhase({ kind: "error", message: c.error ?? "The trade didn't go through. Nothing was spent." });
     } else {
-      setPhase({ kind: "done", qty: c.qty ?? c.est_qty ?? null });
+      const got = Number(c.qty ?? c.est_qty);
+      setPhase({ kind: "done", qty: Number.isFinite(got) && got > 0 ? got : null });
     }
     router.refresh();
   }
@@ -162,12 +165,14 @@ export function ContributePanel({
         ) : (
           <span className="text-muted">Getting a live price…</span>
         )}
-        {short && <div className="mt-1 text-loss">That&apos;s more than your cash. Add USDC in your wallet first.</div>}
+        {short && (
+          <div className="mt-1 text-loss">{demo ? "That's more than your demo cash. Cash out a jar to free some up." : "That's more than your cash. Add USDC in your wallet first."}</div>
+        )}
       </div>
 
       <button type="button" onClick={buy} disabled={!valid || busy || short} className="btn btn-primary mt-2 w-full py-3 text-lg">
         {busy && <span className="spinner" aria-hidden />}
-        {phase.kind === "placing" ? "Buying…" : phase.kind === "settling" ? "Settling on-chain…" : `Add ${valid ? usd(value) : ""} to jar`}
+        {phase.kind === "placing" ? "Buying…" : phase.kind === "settling" ? (demo ? "Settling (demo)…" : "Settling on-chain…") : `Add ${valid ? usd(value) : ""} to jar`}
       </button>
 
       {phase.kind === "done" && (

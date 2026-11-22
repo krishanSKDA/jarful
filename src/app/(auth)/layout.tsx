@@ -4,7 +4,9 @@ import { Jar } from "@/components/Jar";
 import { currentUser } from "@/lib/auth";
 
 export default async function AuthLayout({ children }: { children: React.ReactNode }) {
-  if (await currentUser()) redirect("/app");
+  // Demo visitors can still reach sign-up / sign-in to create a real account.
+  const user = await currentUser();
+  if (user && !user.is_demo) redirect("/app");
   return (
     <div className="grid min-h-dvh lg:grid-cols-2">
       <div className="flex flex-col px-4 py-6 sm:px-10">

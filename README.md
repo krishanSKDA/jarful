@@ -17,6 +17,11 @@ Built on the [True Markets Gateway API](https://docs.truemarkets.co/gateway/). E
 | Cash out a jar back to USDC | market sell via `/orders` |
 | Price chart (day / week / month) on each jar | market data `prices/history` |
 | On-chain activity feed with explorer links | `GET /v1/gateway/transactions` |
+| **Try the demo**: a sample account with three part-filled jars, no sign-up | live market data; past buys priced from real 30-day history |
+
+### Demo mode
+
+The landing page's **Try the demo** button opens a fresh, private sample account. It starts with $250 of pretend cash and three jars whose past buys use real True Markets prices from the last 30 days, so each jar's growth or loss is the asset's actual move. Buying, cashing out, auto-invest settings, the wallet and the activity feed all work there, but no order is sent and no money moves. A banner on every page says so. Demo accounts are deleted after 24 hours.
 
 ## Production details
 

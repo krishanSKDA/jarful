@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { Logo } from "@/components/Logo";
+import { DemoButton } from "@/components/DemoButton";
 import { LandingCalculator } from "@/components/LandingCalculator";
 import { Sparkline } from "@/components/Sparkline";
 import { currentUser } from "@/lib/auth";
@@ -46,10 +47,17 @@ export default async function Home() {
               <Link href={user ? "/app/goals/new" : "/signup"} className="btn btn-primary px-6 py-3 text-lg">
                 Start a jar
               </Link>
-              <a href="#how" className="btn btn-quiet px-6 py-3 text-lg">
-                How it works
-              </a>
+              {user && !user.is_demo ? (
+                <a href="#how" className="btn btn-quiet px-6 py-3 text-lg">
+                  How it works
+                </a>
+              ) : (
+                <DemoButton className="btn btn-quiet px-6 py-3 text-lg">Try the demo</DemoButton>
+              )}
             </div>
+            {(!user || user.is_demo) && (
+              <p className="mt-3 text-sm text-muted">The demo opens a sample account with live prices and pretend money. No sign-up needed.</p>
+            )}
           </div>
           <LandingCalculator assets={assets} />
         </section>

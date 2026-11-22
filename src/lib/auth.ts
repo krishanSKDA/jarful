@@ -18,7 +18,10 @@ export type User = {
   tm_user_id: string | null;
   solana_address: string | null;
   evm_address: string | null;
+  is_demo: boolean;
 };
+
+export const USER_COLUMNS = "id, email, name, tm_user_id, solana_address, evm_address, is_demo";
 
 const key = () => new TextEncoder().encode(config.sessionSecret());
 
@@ -49,10 +52,7 @@ export const currentUser = cache(async (): Promise<User | null> => {
   try {
     const { payload } = await jwtVerify(token, key(), { algorithms: ["HS256"] });
     if (!payload.sub) return null;
-    return await one<User>(
-      "SELECT id, email, name, tm_user_id, solana_address, evm_address FROM users WHERE id = $1",
-      [payload.sub],
-    );
+    return await one<User>(`SELECT ${USER_COLUMNS} FROM users WHERE id = $1`, [payload.sub]);
   } catch {
     return null;
   }
@@ -81,13 +81,13 @@ export function newId() {
  * the same external_ref_id always returns the same Gateway user.
  */
 export async function ensureProvisioned(user: User): Promise<User> {
-  if (user.tm_user_id && user.solana_address) return user;
+  if (user.is_demo || (user.tm_user_id && user.solana_address)) return user;
   const tmUser = await createTmUser(`${config.externalRefPrefix}_${user.id}`);
   const solana = tmUser.wallets.find((w) => w.chain_family === "solana")?.address ?? null;
   const evm = tmUser.wallets.find((w) => w.chain_family === "evm")?.address ?? null;
   const updated = await one<User>(
     `UPDATE users SET tm_user_id = $2, solana_address = $3, evm_address = $4 WHERE id = $1
-     RETURNING id, email, name, tm_user_id, solana_address, evm_address`,
+     RETURNING ${USER_COLUMNS}`,
     [user.id, tmUser.user_id, solana, evm],
   );
   return updated ?? user;

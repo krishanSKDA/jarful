@@ -31,6 +31,18 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <div className="border-t border-line px-4 py-2 sm:hidden">
           <AppNav />
         </div>
+        {user.is_demo && (
+          <div className="border-t border-[color-mix(in_srgb,var(--marigold)_55%,transparent)] bg-[color-mix(in_srgb,var(--marigold)_22%,white)]">
+            <p className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-sm sm:px-6">
+              <span>
+                <strong>Demo account.</strong> Prices are live; the cash and trades are pretend. No real money moves.
+              </span>
+              <Link href="/signup" className="font-semibold underline underline-offset-2 hover:text-cobalt">
+                Create a real account
+              </Link>
+            </p>
+          </div>
+        )}
       </header>
       <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10">{children}</main>
     </div>

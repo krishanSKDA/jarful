@@ -1,6 +1,6 @@
 import { query, one } from "./db";
 import { config } from "./env";
-import { ensureProvisioned, newId, type User } from "./auth";
+import { ensureProvisioned, newId, USER_COLUMNS, type User } from "./auth";
 import { latestPrices, fundingAsset } from "./catalog";
 import { createMarketOrder, executeOrder, getBalances, getOrder, TmError, type TmOrderStatus } from "./tm";
 
@@ -101,6 +101,7 @@ export async function goalContributions(userId: string, goalId: string) {
 
 /** Spendable USDC on Solana for this user. */
 export async function cashBalance(user: User): Promise<number> {
+  if (user.is_demo) return n((await one<{ demo_cash: number }>("SELECT demo_cash FROM users WHERE id = $1", [user.id]))?.demo_cash);
   if (!user.tm_user_id) return 0;
   const [{ data }, usdc] = await Promise.all([getBalances(user.tm_user_id), fundingAsset()]);
   const row = data.find((b) => (usdc && b.asset_id === usdc.id) || (b.symbol === "USDC" && b.chain === "solana"));
@@ -157,6 +158,7 @@ function mapStatus(s: TmOrderStatus | string): ContributionRow["status"] {
 export async function contribute(userIn: User, goal: GoalRow, usd: number, source: "manual" | "auto" = "manual") {
   if (!Number.isFinite(usd) || usd < config.minOrderUsd) throw new UserFacingError(`The smallest amount is $${config.minOrderUsd}.`);
   if (usd > config.maxOrderUsd) throw new UserFacingError(`The largest single amount is $${config.maxOrderUsd}.`);
+  if (userIn.is_demo) return demoBuy(userIn, goal, usd, source);
   const user = await ensureProvisioned(userIn);
   const amount = usd.toFixed(2);
 
@@ -180,6 +182,7 @@ export async function contribute(userIn: User, goal: GoalRow, usd: number, sourc
 
 /** Move every unit held for this goal back to cash (market sell). */
 export async function withdraw(userIn: User, goal: GoalView) {
+  if (userIn.is_demo) return demoSell(userIn, goal);
   const user = await ensureProvisioned(userIn);
   const { data } = await getBalances(user.tm_user_id!);
   const walletQty = n(data.find((b) => b.asset_id === goal.asset_id)?.available);
@@ -211,6 +214,7 @@ export async function withdraw(userIn: User, goal: GoalView) {
 export async function syncContribution(user: User, contributionId: string) {
   const c = await one<ContributionRow>("SELECT * FROM contributions WHERE id = $1 AND user_id = $2", [contributionId, user.id]);
   if (!c) return null;
+  if (user.is_demo) return settleDemo(c);
   if (!c.order_id || !user.tm_user_id || ["complete", "failed", "canceled"].includes(c.status)) return c;
   const order = await getOrder(user.tm_user_id, c.order_id);
   const status = mapStatus(order.status);
@@ -231,8 +235,75 @@ export async function syncContribution(user: User, contributionId: string) {
   return updated;
 }
 
+// ---------------------------------------------------------------- demo accounts
+// Demo accounts trade against live True Markets prices but never place a real order:
+// cash is a number in the database and a buy "settles" a couple of seconds after it is placed.
+
+const DEMO_SETTLE_MS = 2500;
+
+async function livePrice(economicId: string) {
+  const p = (await latestPrices([economicId])).get(economicId);
+  if (!p) throw new UserFacingError("There's no live price for this asset right now. Try again in a minute.", 503);
+  return p;
+}
+
+/** Simulated quote at the live price (demo accounts have no Gateway user to quote for). */
+export async function demoQuote(economicId: string, usd: number) {
+  const price = await livePrice(economicId);
+  return { qty: usd / price, price, fee: 0, notional: usd };
+}
+
+async function demoBuy(user: User, goal: GoalRow, usd: number, source: "manual" | "auto") {
+  const price = await livePrice(goal.economic_id);
+  const amount = Math.round(usd * 100) / 100;
+  const paid = await one("UPDATE users SET demo_cash = demo_cash - $2 WHERE id = $1 AND is_demo AND demo_cash >= $2 RETURNING id", [user.id, amount]);
+  if (!paid) throw new UserFacingError("There isn't enough demo cash for this. Cash out a jar to free some up.", 422);
+  return one<ContributionRow>(
+    `INSERT INTO contributions (id, goal_id, user_id, side, source, usd_amount, est_qty, status)
+     VALUES ($1,$2,$3,'buy',$4,$5,$6,'pending') RETURNING *`,
+    [newId(), goal.id, user.id, source, amount, amount / price],
+  );
+}
+
+async function demoSell(user: User, goal: GoalView) {
+  if (goal.pendingQty > 0) throw new UserFacingError("Your last buy is still settling. Try again in a moment.");
+  if (goal.qty <= 0 || !goal.price || goal.qty * goal.price < 0.5) throw new UserFacingError("There's nothing in this jar to cash out yet.");
+  const proceeds = Math.floor(goal.qty * goal.price * 100) / 100;
+  const row = await one<ContributionRow>(
+    `INSERT INTO contributions (id, goal_id, user_id, side, source, usd_amount, qty, status)
+     VALUES ($1,$2,$3,'sell','manual',$4,$5,'complete') RETURNING *`,
+    [newId(), goal.id, user.id, proceeds, goal.qty],
+  );
+  await query("UPDATE users SET demo_cash = demo_cash + $2 WHERE id = $1 AND is_demo", [user.id, proceeds]);
+  return row;
+}
+
+async function settleDemo(c: ContributionRow) {
+  if (c.status !== "pending" || Date.now() - new Date(c.created_at).getTime() < DEMO_SETTLE_MS) return c;
+  return (await one<ContributionRow>("UPDATE contributions SET status = 'complete', qty = est_qty, updated_at = now() WHERE id = $1 AND status = 'pending' RETURNING *", [c.id])) ?? c;
+}
+
+/** A demo account's trades, shaped for the activity page. */
+export async function demoActivity(userId: string) {
+  const rows = await query<ContributionRow & { asset_symbol: string; goal_name: string; goal_emoji: string }>(
+    `SELECT c.*, g.asset_symbol, g.name AS goal_name, g.emoji AS goal_emoji
+       FROM contributions c JOIN goals g ON g.id = c.goal_id
+      WHERE c.user_id = $1 ORDER BY c.created_at DESC LIMIT 50`,
+    [userId],
+  );
+  return rows.map((r) => ({ ...r, usd_amount: r.usd_amount === null ? null : n(r.usd_amount), qty: r.qty === null ? null : n(r.qty), est_qty: r.est_qty === null ? null : n(r.est_qty) }));
+}
+
 /** Sync recent unsettled contributions for a user (bounded, so page loads stay fast). */
 export async function syncPending(user: User) {
+  if (user.is_demo) {
+    await query(
+      `UPDATE contributions SET status = 'complete', qty = est_qty, updated_at = now()
+        WHERE user_id = $1 AND status = 'pending' AND created_at < now() - make_interval(secs => $2)`,
+      [user.id, DEMO_SETTLE_MS / 1000],
+    );
+    return;
+  }
   const pending = await query<{ id: string }>(
     `SELECT id FROM contributions WHERE user_id = $1 AND status IN ('placing','pending') AND order_id IS NOT NULL
        AND created_at > now() - interval '7 days' ORDER BY created_at DESC LIMIT 8`,
@@ -247,6 +318,7 @@ export async function syncPending(user: User) {
 export async function runDueAutoInvests(limit = 25) {
   const due = await query<GoalRow>(
     `SELECT * FROM goals WHERE status = 'active' AND auto_amount IS NOT NULL AND next_run_at <= now()
+        AND user_id NOT IN (SELECT id FROM users WHERE is_demo)
       ORDER BY next_run_at LIMIT $1`,
     [limit],
   );
@@ -256,7 +328,7 @@ export async function runDueAutoInvests(limit = 25) {
     const next = nextRun(new Date(), goal.auto_interval ?? "weekly");
     const claimed = await one("UPDATE goals SET next_run_at = $2 WHERE id = $1 AND next_run_at = $3 RETURNING id", [goal.id, next, raw.next_run_at]);
     if (!claimed) continue;
-    const user = await one<User>("SELECT id, email, name, tm_user_id, solana_address, evm_address FROM users WHERE id = $1", [goal.user_id]);
+    const user = await one<User>(`SELECT ${USER_COLUMNS} FROM users WHERE id = $1`, [goal.user_id]);
     if (!user) continue;
     try {
       await contribute(user, goal, goal.auto_amount!, "auto");

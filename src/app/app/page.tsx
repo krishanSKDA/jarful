@@ -131,7 +131,7 @@ export default async function Dashboard() {
             <h2 className="font-display text-2xl font-semibold">Cash ready to invest</h2>
             <p className="font-display num mt-2 text-4xl font-bold">{cash === null ? "N/A" : usd(cash)}</p>
             <p className="mt-2 text-muted">
-              USDC in your wallet{user.solana_address ? ` (${shortAddress(user.solana_address)})` : ""}. Open a jar to add some of it.
+              {user.is_demo ? "Pretend cash for the demo" : `USDC in your wallet${user.solana_address ? ` (${shortAddress(user.solana_address)})` : ""}`}. Open a jar to add some of it.
             </p>
           </section>
         )}

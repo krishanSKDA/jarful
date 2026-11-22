@@ -1,14 +1,69 @@
+import Link from "next/link";
 import QRCode from "qrcode";
 import { CopyButton } from "@/components/AppNav";
-import { requireUser } from "@/lib/auth";
+import { requireUser, type User } from "@/lib/auth";
+import { DEMO_CASH } from "@/lib/demo";
+import { cashBalance, listGoals } from "@/lib/goals";
 import { latestPrices, solanaAssets, fundingAsset } from "@/lib/catalog";
 import { getBalances, type TmBalance } from "@/lib/tm";
 import { qty, usd } from "@/lib/format";
 
 export const metadata = { title: "Wallet" };
 
+/** Demo accounts have no on-chain wallet: show the simulated cash and what the jars hold. */
+async function DemoWallet({ user }: { user: User }) {
+  const [cash, goals] = await Promise.all([cashBalance(user), listGoals(user.id)]);
+  const holdings = new Map<string, { symbol: string; name: string; qty: number; value: number }>();
+  for (const g of goals) {
+    const h = holdings.get(g.asset_id) ?? { symbol: g.asset_symbol, name: g.asset_name, qty: 0, value: 0 };
+    h.qty += g.qty + g.pendingQty;
+    h.value += g.value;
+    holdings.set(g.asset_id, h);
+  }
+  const rows = [{ symbol: "USDC", name: "US Dollar Coin (cash)", qty: cash, value: cash }, ...[...holdings.values()].filter((h) => h.qty > 0).sort((a, b) => b.value - a.value)];
+
+  return (
+    <div className="space-y-8">
+      <h1 className="font-display text-4xl font-bold">Wallet</h1>
+      <section className="panel p-6">
+        <h2 className="font-display text-2xl font-semibold">Add cash</h2>
+        <p className="mt-2 max-w-prose text-muted">
+          In a real account this is where your deposit address and QR code appear. You send <strong className="text-ink">USDC</strong> on the{" "}
+          <strong className="text-ink">Solana</strong> network to it, and it shows up here as cash. The demo started you with {usd(DEMO_CASH, { cents: false })} of pretend
+          cash instead.
+        </p>
+        <Link href="/signup" className="btn btn-primary mt-4">
+          Create a real account
+        </Link>
+      </section>
+      <section className="panel p-6">
+        <h2 className="font-display text-2xl font-semibold">What&apos;s in it</h2>
+        <table className="mt-4 w-full text-left">
+          <thead className="text-sm text-muted">
+            <tr>
+              <th className="pb-2 font-medium">Asset</th>
+              <th className="pb-2 text-right font-medium">Amount</th>
+              <th className="pb-2 text-right font-medium">Value</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-line">
+            {rows.map((r) => (
+              <tr key={r.symbol}>
+                <td className="py-3 font-medium">{r.name}</td>
+                <td className="num py-3 text-right">{qty(r.qty, r.symbol)}</td>
+                <td className="num py-3 text-right font-semibold">{usd(r.value)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+    </div>
+  );
+}
+
 export default async function WalletPage() {
   const user = await requireUser();
+  if (user.is_demo) return <DemoWallet user={user} />;
   if (!user.solana_address || !user.tm_user_id) {
     return (
       <div className="panel max-w-xl p-6">

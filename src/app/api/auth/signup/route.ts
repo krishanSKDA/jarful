@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { body, clientIp, ok, rateLimit, route } from "@/lib/api";
-import { ensureProvisioned, hashPassword, newId, startSession, type User } from "@/lib/auth";
+import { ensureProvisioned, hashPassword, newId, startSession, USER_COLUMNS, type User } from "@/lib/auth";
 import { one } from "@/lib/db";
 import { UserFacingError } from "@/lib/goals";
 
@@ -18,7 +18,7 @@ export const POST = route(async (req) => {
 
   const user = await one<User>(
     `INSERT INTO users (id, email, name, password_hash) VALUES ($1,$2,$3,$4)
-     RETURNING id, email, name, tm_user_id, solana_address, evm_address`,
+     RETURNING ${USER_COLUMNS}`,
     [newId(), input.email, input.name, await hashPassword(input.password)],
   );
   await startSession(user!.id);

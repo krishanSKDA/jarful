@@ -82,7 +82,7 @@ export default async function GoalPage({ params, searchParams }: PageProps<"/app
                   </div>
                 )}
               </dl>
-              {goal.pendingQty > 0 && <p className="mt-4 text-sm text-muted">The lighter band is a buy that&apos;s still settling on-chain.</p>}
+              {goal.pendingQty > 0 && <p className="mt-4 text-sm text-muted">The lighter band is a buy that&apos;s still settling{user.is_demo ? "" : " on-chain"}.</p>}
               {goal.progress < 1 && (
                 <a href="#add-heading" className="btn btn-primary mt-5 w-full lg:hidden">
                   Add to this jar
@@ -140,6 +140,7 @@ export default async function GoalPage({ params, searchParams }: PageProps<"/app
               suggested={onTrack && onTrack >= config.minOrderUsd ? onTrack : null}
               minOrder={config.minOrderUsd}
               maxOrder={config.maxOrderUsd}
+              demo={user.is_demo}
             />
           )}
           <AutoInvest
