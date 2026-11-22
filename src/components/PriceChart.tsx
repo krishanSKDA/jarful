@@ -58,7 +58,7 @@ export function PriceChart({ economicId, symbol }: { economicId: string; symbol:
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <div className="text-sm text-muted">{symbol} price</div>
-          <div className="font-display num text-2xl font-semibold">{shown ? price(shown.p) : "—"}</div>
+          <div className="font-display num text-2xl font-semibold">{shown ? price(shown.p) : points === "error" ? "Unavailable" : "Loading"}</div>
           <div className="num text-sm" style={{ color: change === null ? undefined : change >= 0 ? "var(--gain)" : "var(--loss)" }}>
             {hover !== null && shown
               ? new Date(shown.t).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })

@@ -23,7 +23,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <div className="ml-auto flex items-center gap-4">
             <Link href="/app/wallet" className="rounded-full border border-line bg-surface px-3 py-1.5 text-sm hover:border-ink">
               <span className="text-muted">Cash </span>
-              <span className="num font-semibold">{cash === null ? "—" : usd(cash)}</span>
+              <span className="num font-semibold">{cash === null ? "N/A" : usd(cash)}</span>
             </Link>
             <SignOutButton />
           </div>

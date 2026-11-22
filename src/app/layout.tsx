@@ -6,7 +6,7 @@ const bricolage = Bricolage_Grotesque({ subsets: ["latin"], variable: "--font-br
 const schibsted = Schibsted_Grotesk({ subsets: ["latin"], variable: "--font-schibsted", display: "swap" });
 
 export const metadata: Metadata = {
-  title: { default: "Jarful — invest toward the things you want", template: "%s · Jarful" },
+  title: { default: "Jarful: invest toward the things you want", template: "%s · Jarful" },
   description:
     "Give every goal its own jar. Fill it with tokenized stocks, gold or crypto, one tap or on autopilot, and watch it rise.",
 };

@@ -65,7 +65,7 @@ export default async function GoalPage({ params, searchParams }: PageProps<"/app
                 <div>
                   <dt className="text-muted">Growth</dt>
                   <dd className="num font-semibold" style={{ color: goal.invested ? (gain >= 0 ? "var(--gain)" : "var(--loss)") : undefined }}>
-                    {goal.invested ? `${usd(gain, { sign: true })} (${pct(gain / goal.invested)})` : "—"}
+                    {goal.invested ? `${usd(gain, { sign: true })} (${pct(gain / goal.invested)})` : "None yet"}
                   </dd>
                 </div>
                 <div>

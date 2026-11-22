@@ -78,7 +78,7 @@ export async function tm<T = unknown>(method: string, path: string, opts: CallOp
   });
   const json = await res.json().catch(() => ({}));
   if (!res.ok) {
-    // A stale token (e.g. server clock drift) — drop it so the next call re-mints.
+    // A stale token (e.g. server clock drift): drop it so the next call re-mints.
     if (res.status === 401) g.__tmToken = undefined;
     throw new TmError(res.status, json.code ?? json.type ?? "error", json.message ?? `Request failed (${res.status})`, json.request_id);
   }
@@ -209,7 +209,7 @@ export async function createTmUser(externalRefId: string): Promise<TmUser> {
       });
       if (user.wallets?.length) return user;
     } catch (err) {
-      // 503: wallets not ready yet — the same request finishes them.
+      // 503: wallets not ready yet; the same request finishes them.
       if (!(err instanceof TmError) || err.status !== 503 || attempt >= 6) throw err;
     }
     if (attempt >= 6) throw new TmError(503, "wallets_pending", "Wallets are still being created. Try again shortly.");
