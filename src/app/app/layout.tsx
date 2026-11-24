@@ -9,7 +9,10 @@ export const dynamic = "force-dynamic";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   let user = await requireUser();
-  user = await ensureProvisioned(user).catch(() => user);
+  user = await ensureProvisioned(user).catch((err) => {
+    console.error("wallet provisioning failed", { userId: user.id, err });
+    return user;
+  });
   const cash = await cashBalance(user).catch(() => null);
 
   return (

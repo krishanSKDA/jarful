@@ -1,9 +1,9 @@
 import Link from "next/link";
 import QRCode from "qrcode";
 import { CopyButton } from "@/components/AppNav";
-import { requireUser, type User } from "@/lib/auth";
+import { ensureProvisioned, requireUser, type User } from "@/lib/auth";
 import { DEMO_CASH } from "@/lib/demo";
-import { cashBalance, listGoals } from "@/lib/goals";
+import { cashBalance, friendly, listGoals } from "@/lib/goals";
 import { latestPrices, solanaAssets, fundingAsset } from "@/lib/catalog";
 import { getBalances, type TmBalance } from "@/lib/tm";
 import { qty, usd } from "@/lib/format";
@@ -62,15 +62,28 @@ async function DemoWallet({ user }: { user: User }) {
 }
 
 export default async function WalletPage() {
-  const user = await requireUser();
+  let user = await requireUser();
   if (user.is_demo) return <DemoWallet user={user} />;
   if (!user.solana_address || !user.tm_user_id) {
-    return (
-      <div className="panel max-w-xl p-6">
-        <h1 className="font-display text-3xl font-bold">Your wallet is being set up</h1>
-        <p className="mt-2 text-muted">This usually takes a few seconds. Refresh the page to check again.</p>
-      </div>
-    );
+    // Try once more here so a failure is shown, not hidden behind "being set up".
+    let problem: string | null = null;
+    try {
+      user = await ensureProvisioned(user);
+    } catch (err) {
+      console.error("wallet provisioning failed", { userId: user.id, err });
+      problem = friendly(err).message;
+    }
+    if (!user.solana_address || !user.tm_user_id) {
+      return (
+        <div className="panel max-w-xl p-6">
+          <h1 className="font-display text-3xl font-bold">{problem ? "We couldn't create your wallet yet" : "Your wallet is being set up"}</h1>
+          <p className="mt-2 text-muted">{problem ?? "This usually takes a few seconds."}</p>
+          <Link href="/app/wallet" prefetch={false} className="btn btn-primary mt-4">
+            Try again
+          </Link>
+        </div>
+      );
+    }
   }
 
   const [qr, balances, assets, usdc] = await Promise.all([
