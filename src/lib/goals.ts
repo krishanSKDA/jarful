@@ -140,6 +140,9 @@ export function friendly(err: unknown): { message: string; status: number } {
       case "resource_exhausted":
         return { message: "Too many requests right now. Wait a few seconds and try again.", status: 429 };
     }
+    if (/user limit/i.test(err.message)) {
+      return { message: "Jarful can't open new wallets right now. Try again later, or use Try the demo on the home page to look around.", status: 503 };
+    }
     if (err.status >= 500) return { message: "The trading service is unavailable. Try again in a minute.", status: 503 };
     return { message: err.message, status: err.status >= 400 && err.status < 500 ? err.status : 400 };
   }
