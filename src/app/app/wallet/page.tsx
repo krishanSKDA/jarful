@@ -1,10 +1,9 @@
 import Link from "next/link";
 import QRCode from "qrcode";
 import { CopyButton } from "@/components/AppNav";
-import { ConvertButton } from "@/components/ConvertButton";
 import { ensureProvisioned, requireUser, type User } from "@/lib/auth";
 import { DEMO_CASH } from "@/lib/demo";
-import { cashBalance, friendly, listGoals } from "@/lib/goals";
+import { cashBalance, friendly, isDollarCash, listGoals } from "@/lib/goals";
 import { latestPrices, solanaAssets, fundingAsset } from "@/lib/catalog";
 import { getBalances, type TmBalance } from "@/lib/tm";
 import { qty, usd } from "@/lib/format";
@@ -99,12 +98,11 @@ export default async function WalletPage() {
   const rows = held
     .map((b) => {
       const a = byId.get(b.asset_id);
-      const isCash = (usdc && b.asset_id === usdc.id) || b.symbol === "USDC";
-      // Other dollar stablecoins (e.g. PYUSD) count at $1 but must be converted to USDC before buying.
-      const otherStable = !isCash && Boolean(b.stable);
-      const p = isCash || otherStable ? 1 : a ? prices.get(a.economic_asset_id) ?? null : null;
-      const name = isCash ? "US Dollar Coin (cash)" : otherStable ? `${b.symbol} (dollar stablecoin)` : a?.name ?? b.symbol;
-      return { ...b, name, value: p !== null ? Number(b.total) * p : null, isCash, otherStable };
+      // USDC and other dollar stablecoins (e.g. PYUSD) are cash: buys spend them, converting PYUSD automatically.
+      const isCash = (usdc && b.asset_id === usdc.id) || isDollarCash(b);
+      const p = isCash ? 1 : a ? prices.get(a.economic_asset_id) ?? null : null;
+      const name = b.symbol === "USDC" ? "US Dollar Coin (cash)" : isCash ? `${b.symbol} (cash)` : a?.name ?? b.symbol;
+      return { ...b, name, value: p !== null ? Number(b.total) * p : null, isCash };
     })
     .sort((x, y) => Number(y.isCash) - Number(x.isCash) || (y.value ?? 0) - (x.value ?? 0));
 
@@ -117,8 +115,8 @@ export default async function WalletPage() {
         <div className="min-w-0">
           <h2 className="font-display text-2xl font-semibold">Add cash</h2>
           <p className="mt-2 max-w-prose text-muted">
-            Send <strong className="text-ink">USDC</strong> on the <strong className="text-ink">Solana</strong> network to this address. USDC sent on any other network
-            won&apos;t arrive. Network fees for trades are covered.
+            Send <strong className="text-ink">USDC</strong> or <strong className="text-ink">PYUSD</strong> on the <strong className="text-ink">Solana</strong> network to this
+            address. Coins sent on any other network won&apos;t arrive. Network fees for trades are covered.
           </p>
           <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl bg-porcelain px-4 py-3">
             <code className="num min-w-0 break-all text-sm">{user.solana_address}</code>
@@ -151,12 +149,7 @@ export default async function WalletPage() {
                   <td className="py-3">
                     <div className="font-medium">{r.name}</div>
                     {Number(r.available) < Number(r.total) && <div className="text-xs text-muted">{qty(Number(r.available))} available</div>}
-                    {r.otherStable && Number(r.available) >= 1 && (
-                      <>
-                        <div className="text-sm text-muted">Jars are bought with USDC. Convert this to use it.</div>
-                        <ConvertButton assetId={r.asset_id} symbol={r.symbol} amount={Number(r.available)} />
-                      </>
-                    )}
+                    {r.isCash && r.symbol !== "USDC" && <div className="text-sm text-muted">Spent like USDC when you add to a jar.</div>}
                   </td>
                   <td className="num py-3 text-right">{qty(Number(r.total), r.symbol)}</td>
                   <td className="num py-3 text-right font-semibold">{usd(r.value)}</td>

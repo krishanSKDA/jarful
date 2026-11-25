@@ -1,8 +1,8 @@
 import { query, one } from "./db";
 import { config } from "./env";
 import { ensureProvisioned, newId, USER_COLUMNS, type User } from "./auth";
-import { latestPrices, fundingAsset } from "./catalog";
-import { createMarketOrder, executeOrder, getBalances, getOrder, listAssets, TmError, type TmOrderStatus } from "./tm";
+import { latestPrices } from "./catalog";
+import { createMarketOrder, executeOrder, getBalances, getOrder, TmError, type TmOrderStatus } from "./tm";
 
 export type Interval = "daily" | "weekly" | "monthly";
 
@@ -99,54 +99,20 @@ export async function goalContributions(userId: string, goalId: string) {
   return rows.map((r) => ({ ...r, usd_amount: r.usd_amount === null ? null : n(r.usd_amount), qty: r.qty === null ? null : n(r.qty), est_qty: r.est_qty === null ? null : n(r.est_qty) }));
 }
 
-/** Spendable USDC on Solana for this user. */
-export async function cashBalance(user: User): Promise<number> {
-  if (user.is_demo) return n((await one<{ demo_cash: number }>("SELECT demo_cash FROM users WHERE id = $1", [user.id]))?.demo_cash);
-  if (!user.tm_user_id) return 0;
-  const [{ data }, usdc] = await Promise.all([getBalances(user.tm_user_id), fundingAsset()]);
-  return n(data.find((b) => isUsdc(b, usdc?.id))?.available);
-}
-
-const isUsdc = (b: { asset_id: string; symbol: string; chain: string | null }, usdcId?: string) =>
-  (usdcId && b.asset_id === usdcId) || (b.symbol === "USDC" && b.chain === "solana");
-
-/** Dollar stablecoins other than USDC (e.g. PYUSD) sitting in the wallet. Buys spend USDC, so these need converting first. */
-export async function otherStables(user: User): Promise<{ assetId: string; symbol: string; available: number }[]> {
-  if (user.is_demo || !user.tm_user_id) return [];
-  const [{ data }, usdc] = await Promise.all([getBalances(user.tm_user_id), fundingAsset()]);
-  return data
-    .filter((b) => b.stable && !isUsdc(b, usdc?.id) && n(b.available) > 0)
-    .map((b) => ({ assetId: b.asset_id, symbol: b.symbol, available: n(b.available) }));
+/** Whether a wallet balance is a dollar stablecoin on Solana that buys can spend. */
+export function isDollarCash(b: { symbol: string; chain: string | null; venue?: string; stable?: boolean }) {
+  return b.chain === "solana" && (b.symbol === "USDC" || b.stable === true);
 }
 
 /**
- * Turn another dollar stablecoin (e.g. PYUSD) into USDC with a market sell, so it becomes buying power.
- * Refuses to sign unless the Gateway says the proceeds are USDC.
+ * Spendable cash for this user: USDC plus other dollar stablecoins (e.g. PYUSD) on Solana.
+ * Buys are quoted in USDC; the Gateway converts PYUSD as part of the order (it adds a funding step).
  */
-export async function convertToUsdc(userIn: User, assetId: string) {
-  if (userIn.is_demo) throw new UserFacingError("Demo accounts don't hold real stablecoins.");
-  const user = await ensureProvisioned(userIn);
-  const [{ data }, usdc, assets] = await Promise.all([getBalances(user.tm_user_id!), fundingAsset(), listAssets()]);
-  const bal = data.find((b) => b.asset_id === assetId);
-  if (!bal || !bal.stable || isUsdc(bal, usdc?.id)) throw new UserFacingError("Only other dollar stablecoins can be converted to USDC.");
-  const decimals = Math.min(assets.find((a) => a.id === assetId)?.decimals ?? bal.decimals ?? 6, 9);
-  const qty = Math.floor(n(bal.available) * 10 ** decimals) / 10 ** decimals;
-  if (qty < 1) throw new UserFacingError(`There's less than 1 ${bal.symbol} to convert.`);
-
-  const order = await createMarketOrder(user.tm_user_id!, assetId, "sell", qty.toFixed(decimals));
-  const into = order.quote?.quote_asset;
-  if (into && into !== "USDC" && into !== usdc?.id) {
-    throw new UserFacingError(`True Markets would convert this into ${into}, not USDC, so nothing was done.`);
-  }
-  await executeOrder(user.tm_user_id!, order);
-
-  // Stablecoin swaps settle in seconds; wait briefly so the wallet shows the new cash.
-  let status: string = "pending";
-  for (let i = 0; i < 10 && !["complete", "failed", "canceled"].includes(status); i++) {
-    await new Promise((r) => setTimeout(r, 2000));
-    status = (await getOrder(user.tm_user_id!, order.order_id).catch(() => ({ status }))).status;
-  }
-  return { orderId: order.order_id, status, sold: qty, symbol: bal.symbol, expected: order.quote?.qty_out ? Number(order.quote.qty_out) : null };
+export async function cashBalance(user: User): Promise<number> {
+  if (user.is_demo) return n((await one<{ demo_cash: number }>("SELECT demo_cash FROM users WHERE id = $1", [user.id]))?.demo_cash);
+  if (!user.tm_user_id) return 0;
+  const { data } = await getBalances(user.tm_user_id);
+  return data.filter(isDollarCash).reduce((sum, b) => sum + n(b.available), 0);
 }
 
 // ---------------------------------------------------------------- writes

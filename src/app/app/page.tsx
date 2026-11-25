@@ -3,8 +3,8 @@ import { Jar } from "@/components/Jar";
 import { CopyButton } from "@/components/AppNav";
 import { requireUser } from "@/lib/auth";
 import { query } from "@/lib/db";
-import { cashBalance, listGoals, otherStables, syncPending } from "@/lib/goals";
-import { pct, qty, relDate, shortAddress, usd } from "@/lib/format";
+import { cashBalance, listGoals, syncPending } from "@/lib/goals";
+import { pct, relDate, shortAddress, usd } from "@/lib/format";
 
 export const metadata = { title: "Your jars" };
 
@@ -16,10 +16,9 @@ function greeting() {
 export default async function Dashboard() {
   const user = await requireUser();
   await syncPending(user).catch(() => null);
-  const [goals, cash, stables, recent] = await Promise.all([
+  const [goals, cash, recent] = await Promise.all([
     listGoals(user.id),
     cashBalance(user).catch(() => null),
-    otherStables(user).catch(() => []),
     query<{ id: string; goal_id: string; side: string; source: string; usd_amount: number | null; status: string; created_at: Date; name: string; emoji: string }>(
       `SELECT c.id, c.goal_id, c.side, c.source, c.usd_amount, c.status, c.created_at, g.name, g.emoji
          FROM contributions c JOIN goals g ON g.id = c.goal_id
@@ -109,18 +108,6 @@ export default async function Dashboard() {
         </div>
       </section>
 
-      {stables.some((s) => s.available >= 1) && (
-        <p role="status" className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl bg-cobalt-soft px-4 py-3">
-          <span>
-            You have <strong className="num">{stables.map((s) => qty(s.available, s.symbol)).join(" and ")}</strong> in your wallet. Jars are bought with USDC, so
-            convert it first.
-          </span>
-          <Link href="/app/wallet" className="btn btn-primary px-4 py-1.5 text-sm">
-            Convert in wallet
-          </Link>
-        </p>
-      )}
-
       <div className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
         {cash !== null && cash < 1 && user.solana_address ? (
           <section className="panel p-6">
@@ -144,7 +131,7 @@ export default async function Dashboard() {
             <h2 className="font-display text-2xl font-semibold">Cash ready to invest</h2>
             <p className="font-display num mt-2 text-4xl font-bold">{cash === null ? "N/A" : usd(cash)}</p>
             <p className="mt-2 text-muted">
-              {user.is_demo ? "Pretend cash for the demo" : `USDC in your wallet${user.solana_address ? ` (${shortAddress(user.solana_address)})` : ""}`}. Open a jar to add some of it.
+              {user.is_demo ? "Pretend cash for the demo" : `Dollar stablecoins (USDC, PYUSD) in your wallet${user.solana_address ? ` (${shortAddress(user.solana_address)})` : ""}`}. Open a jar to add some of it.
             </p>
           </section>
         )}
