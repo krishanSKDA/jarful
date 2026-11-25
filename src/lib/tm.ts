@@ -290,7 +290,10 @@ export async function priceHistory(economicAssetId: string, window: string, reso
 
 const batchCache = new Map<string, { at: number; data: Map<string, PricePoint[]> }>();
 
-/** 24h hourly history for many assets in one call, keyed by economic_asset_id. Cached 60s. */
+/**
+ * Recent price history for many assets, keyed by economic_asset_id: the last 24h hourly, or the last
+ * ~day of the 7-day series when the feed has a gap. Cached 60s.
+ */
 export async function dayHistories(economicIds: string[]): Promise<Map<string, PricePoint[]>> {
   const ids = [...new Set(economicIds)].sort();
   const out = new Map<string, PricePoint[]>();
@@ -305,19 +308,25 @@ export async function dayHistories(economicIds: string[]): Promise<Map<string, P
         hit.data.forEach((v, k) => out.set(k, v));
         return;
       }
-      try {
-        const res = await tm<{ results: { asset_id: string; points: PricePoint[] }[] }>(
+      const batch = (window: string, resolution: string, idList: string[]) =>
+        tm<{ results: { asset_id: string; points: PricePoint[] }[] }>(
           "GET",
-          `/v1/defi/market/prices/history/batch?asset_ids=${key}&window=24h&resolution=1h`,
+          `/v1/defi/market/prices/history/batch?asset_ids=${idList.join(",")}&window=${window}&resolution=${resolution}`,
           { auth: false },
-        );
-        const m = new Map<string, PricePoint[]>();
-        for (const r of res.results ?? []) m.set(r.asset_id, r.points ?? []);
-        batchCache.set(key, { at: Date.now(), data: m });
-        m.forEach((v, k) => out.set(k, v));
-      } catch {
-        // Market data is decorative where this is used; fall through with no prices.
+        )
+          .then((res) => res.results ?? [])
+          .catch(() => []);
+
+      const m = new Map<string, PricePoint[]>();
+      for (const r of await batch("24h", "1h", chunk)) if (r.points?.length) m.set(r.asset_id, r.points);
+      // If the feed has a gap (no points in the last 24h), fall back to the latest week so a jar
+      // is valued at its last known price instead of $0. Keep the last 12 points (about a day).
+      const missing = chunk.filter((id) => !m.has(id));
+      if (missing.length) {
+        for (const r of await batch("7d", "2h", missing)) if (r.points?.length) m.set(r.asset_id, r.points.slice(-12));
       }
+      if (m.size) batchCache.set(key, { at: Date.now(), data: m });
+      m.forEach((v, k) => out.set(k, v));
     }),
   );
   return out;

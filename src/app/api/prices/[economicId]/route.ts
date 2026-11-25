@@ -12,9 +12,12 @@ const RANGES: Record<string, { window: string; resolution: string }> = {
 export const GET = route<Ctx>(async (req, { params }) => {
   const { economicId } = await params;
   if (!/^[0-9a-f-]{36}$/i.test(economicId)) return fail("Unknown asset.", 404);
-  const range = RANGES[req.nextUrl.searchParams.get("range") ?? "1w"] ?? RANGES["1w"];
-  const { points } = await priceHistory(economicId, range.window, range.resolution);
+  const key = req.nextUrl.searchParams.get("range") ?? "1w";
+  const range = RANGES[key] ?? RANGES["1w"];
+  let points = (await priceHistory(economicId, range.window, range.resolution).catch(() => ({ points: [] }))).points ?? [];
+  // The day view goes blank when the feed has a gap; show the latest day of the weekly series instead.
+  if (!points.length && key === "1d") points = ((await priceHistory(economicId, "7d", "2h").catch(() => ({ points: [] }))).points ?? []).slice(-12);
   return ok(
-    { points: (points ?? []).map((p) => ({ t: p.t, p: Number(p.price) })).filter((p) => p.p > 0) },
+    { points: points.map((p) => ({ t: p.t, p: Number(p.price) })).filter((p) => p.p > 0) },
   );
 });
