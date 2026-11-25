@@ -157,7 +157,7 @@ export type TmOrderCreated = {
   status: TmOrderStatus | "";
   venue: string;
   payloads?: { digest: string; payload: string }[];
-  quote?: { qty: string; qty_out: string; fee: string; fee_asset: string; issues?: string[] };
+  quote?: { base_asset?: string; quote_asset?: string; qty: string; qty_out: string; fee: string; fee_asset: string; issues?: string[] };
 };
 
 export type TmOrder = {
@@ -170,7 +170,7 @@ export type TmOrder = {
   [k: string]: unknown;
 };
 
-export type TmBalance = { asset_id: string; symbol: string; chain: string | null; venue: string; available: string; total: string };
+export type TmBalance = { asset_id: string; symbol: string; chain: string | null; venue: string; available: string; total: string; stable?: boolean; decimals?: number };
 
 export type TmTransaction = {
   id: string;

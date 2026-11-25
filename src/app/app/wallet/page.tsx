@@ -1,6 +1,7 @@
 import Link from "next/link";
 import QRCode from "qrcode";
 import { CopyButton } from "@/components/AppNav";
+import { ConvertButton } from "@/components/ConvertButton";
 import { ensureProvisioned, requireUser, type User } from "@/lib/auth";
 import { DEMO_CASH } from "@/lib/demo";
 import { cashBalance, friendly, listGoals } from "@/lib/goals";
@@ -99,8 +100,11 @@ export default async function WalletPage() {
     .map((b) => {
       const a = byId.get(b.asset_id);
       const isCash = (usdc && b.asset_id === usdc.id) || b.symbol === "USDC";
-      const p = isCash ? 1 : a ? prices.get(a.economic_asset_id) ?? null : null;
-      return { ...b, name: isCash ? "US Dollar Coin (cash)" : a?.name ?? b.symbol, value: p !== null ? Number(b.total) * p : null, isCash };
+      // Other dollar stablecoins (e.g. PYUSD) count at $1 but must be converted to USDC before buying.
+      const otherStable = !isCash && Boolean(b.stable);
+      const p = isCash || otherStable ? 1 : a ? prices.get(a.economic_asset_id) ?? null : null;
+      const name = isCash ? "US Dollar Coin (cash)" : otherStable ? `${b.symbol} (dollar stablecoin)` : a?.name ?? b.symbol;
+      return { ...b, name, value: p !== null ? Number(b.total) * p : null, isCash, otherStable };
     })
     .sort((x, y) => Number(y.isCash) - Number(x.isCash) || (y.value ?? 0) - (x.value ?? 0));
 
@@ -147,6 +151,12 @@ export default async function WalletPage() {
                   <td className="py-3">
                     <div className="font-medium">{r.name}</div>
                     {Number(r.available) < Number(r.total) && <div className="text-xs text-muted">{qty(Number(r.available))} available</div>}
+                    {r.otherStable && Number(r.available) >= 1 && (
+                      <>
+                        <div className="text-sm text-muted">Jars are bought with USDC. Convert this to use it.</div>
+                        <ConvertButton assetId={r.asset_id} symbol={r.symbol} amount={Number(r.available)} />
+                      </>
+                    )}
                   </td>
                   <td className="num py-3 text-right">{qty(Number(r.total), r.symbol)}</td>
                   <td className="num py-3 text-right font-semibold">{usd(r.value)}</td>
