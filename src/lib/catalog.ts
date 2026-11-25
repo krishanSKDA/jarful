@@ -1,4 +1,4 @@
-import { dayHistories, listAssets, type TmAsset } from "./tm";
+import { assetAvailability, dayHistories, listAssets, type TmAsset } from "./tm";
 
 /** Funding is USDC on Solana, so Jarful offers the Solana spot assets it can buy with it. */
 export const FUNDING = { symbol: "USDC", chain: "solana" } as const;
@@ -32,7 +32,15 @@ export type CatalogAsset = {
   price: number | null;
   change24h: number | null;
   spark: number[];
+  /** False when True Markets doesn't offer this asset class from Jarful's server location. */
+  available: boolean;
 };
+
+/** Whether an asset class can be traded from this server's location (unknown counts as yes). */
+export async function assetClassAvailable(assetClass: string): Promise<boolean> {
+  const avail = await assetAvailability();
+  return !avail || avail.allowed_asset_classes.includes(assetClass);
+}
 
 function tradableOnSolana(a: TmAsset) {
   return a.chain === FUNDING.chain && a.venue === "defi" && a.type === "spot" && a.status === "active" && a.tradeable && !a.stable;
@@ -63,7 +71,7 @@ export async function catalog(scope: "featured" | "all" = "featured"): Promise<C
           return fa - fb || a.symbol.localeCompare(b.symbol);
         });
 
-  const histories = await dayHistories(chosen.map((a) => a.economic_asset_id));
+  const [histories, avail] = await Promise.all([dayHistories(chosen.map((a) => a.economic_asset_id)), assetAvailability()]);
   return chosen.map((a) => {
     const pts = (histories.get(a.economic_asset_id) ?? []).map((p) => Number(p.price)).filter((n) => Number.isFinite(n) && n > 0);
     const price = pts.at(-1) ?? null;
@@ -81,6 +89,7 @@ export async function catalog(scope: "featured" | "all" = "featured"): Promise<C
       price,
       change24h: price && first ? (price - first) / first : null,
       spark: pts,
+      available: !avail || avail.allowed_asset_classes.includes(a.asset_class),
     };
   });
 }

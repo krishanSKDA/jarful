@@ -217,6 +217,20 @@ export async function createTmUser(externalRefId: string): Promise<TmUser> {
   }
 }
 
+export type TmAvailability = { country: string; allowed_product_types: string[]; allowed_asset_classes: string[] };
+const availabilityCache: { at: number; data: TmAvailability | null } = { at: 0, data: null };
+
+/**
+ * What the Gateway lets this server trade, judged from the server's own location (e.g. tokenized stocks are
+ * not offered from the US). Cached 10 minutes; null if it can't be read (callers then don't block anything).
+ */
+export async function assetAvailability(): Promise<TmAvailability | null> {
+  if (availabilityCache.data && Date.now() - availabilityCache.at < 10 * 60_000) return availabilityCache.data;
+  const data = await tm<TmAvailability>("GET", "/v1/gateway/assets/availability").catch(() => null);
+  if (data?.allowed_asset_classes) Object.assign(availabilityCache, { at: Date.now(), data });
+  return data;
+}
+
 export function getBalances(userId: string) {
   return tm<{ data: TmBalance[] }>("GET", "/v1/gateway/balances", { userId });
 }

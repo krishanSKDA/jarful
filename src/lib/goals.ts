@@ -141,7 +141,11 @@ export function friendly(err: unknown): { message: string; status: number } {
       case "quote_stale":
         return { message: "The price moved before the order landed. Nothing was spent. Try again.", status: 409 };
       case "country_restricted":
-        return { message: "This asset isn't available in your country.", status: 403 };
+        // The Gateway judges the country from Jarful's server, not the customer, so say that plainly.
+        return {
+          message: "True Markets doesn't offer this asset from the region Jarful's servers run in, so nothing was bought. Crypto jars like Solana work.",
+          status: 403,
+        };
       case "already_submitted":
         return { message: "This order was already sent.", status: 409 };
       case "resource_exhausted":

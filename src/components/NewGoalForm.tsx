@@ -16,12 +16,23 @@ const EMOJI = ["💻", "🗾", "🛟", "🚗", "🏠", "🎸", "💍", "🎓", "
 type Interval = "daily" | "weekly" | "monthly";
 const PER_WEEK: Record<Interval, number> = { daily: 7, weekly: 1, monthly: 12 / 52 };
 
-export function NewGoalForm({ featured, minOrder, maxOrder }: { featured: CatalogAsset[]; minOrder: number; maxOrder: number }) {
+export function NewGoalForm({
+  featured,
+  minOrder,
+  maxOrder,
+  demo = false,
+}: {
+  featured: CatalogAsset[];
+  minOrder: number;
+  maxOrder: number;
+  /** Demo accounts never trade, so every asset stays selectable. */
+  demo?: boolean;
+}) {
   const router = useRouter();
   const [emoji, setEmoji] = useState(EMOJI[0]);
   const [name, setName] = useState("");
   const [target, setTarget] = useState("500");
-  const [assetId, setAssetId] = useState(featured[0]?.id ?? "");
+  const [assetId, setAssetId] = useState(((demo ? null : featured.find((a) => a.available)) ?? featured[0])?.id ?? "");
   const [deadline, setDeadline] = useState("");
   const [auto, setAuto] = useState(false);
   const [autoAmount, setAutoAmount] = useState("");
@@ -42,8 +53,10 @@ export function NewGoalForm({ featured, minOrder, maxOrder }: { featured: Catalo
   const shown = useMemo(() => {
     const q = search.trim().toLowerCase();
     const list = q ? pool.filter((a) => a.symbol.toLowerCase().includes(q) || a.name.toLowerCase().includes(q)) : pool;
-    return list.slice(0, all ? 60 : 12);
+    // Tradable assets first; sort is stable, so the featured order holds within each group.
+    return [...list].sort((x, y) => Number(y.available) - Number(x.available)).slice(0, all ? 60 : 12);
   }, [pool, search, all]);
+  const someUnavailable = !demo && pool.some((a) => !a.available);
   const selected = pool.find((a) => a.id === assetId) ?? featured.find((a) => a.id === assetId);
 
   async function loadAll() {
@@ -161,27 +174,37 @@ export function NewGoalForm({ featured, minOrder, maxOrder }: { featured: Catalo
               />
             )}
           </div>
+          {someUnavailable && (
+            <p className="rounded-xl bg-porcelain px-3 py-2 text-sm text-muted">
+              Tokenized stocks are paused for now: True Markets doesn&apos;t offer them from the region Jarful&apos;s servers run in. Crypto like Solana works.
+            </p>
+          )}
           <div className="grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Asset">
-            {shown.map((a) => (
+            {shown.map((a) => {
+              const off = !demo && !a.available;
+              return (
               <button
                 key={a.id}
                 type="button"
                 role="radio"
                 aria-checked={assetId === a.id}
+                aria-disabled={off}
+                disabled={off}
                 onClick={() => setAssetId(a.id)}
-                className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 text-left ${assetId === a.id ? "border-cobalt bg-cobalt-soft" : "border-line hover:border-ink"}`}
+                className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 text-left ${off ? "cursor-not-allowed border-line opacity-50" : assetId === a.id ? "border-cobalt bg-cobalt-soft" : "border-line hover:border-ink"}`}
               >
                 {a.icon ? <Image src={a.icon} alt="" width={28} height={28} className="size-7 rounded-full" unoptimized /> : <span className="size-7 rounded-full bg-porcelain" />}
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-semibold">{a.name}</span>
-                  <span className="block truncate text-xs text-muted">{a.blurb ?? a.symbol}</span>
+                  <span className="block truncate text-xs text-muted">{off ? "Not available right now" : a.blurb ?? a.symbol}</span>
                 </span>
                 <span className="num text-right text-xs">
                   <span className="block font-medium">{price(a.price)}</span>
                   <span style={{ color: (a.change24h ?? 0) >= 0 ? "var(--gain)" : "var(--loss)" }}>{pct(a.change24h)}</span>
                 </span>
               </button>
-            ))}
+              );
+            })}
             {shown.length === 0 && <p className="text-sm text-muted">Nothing matches “{search}”.</p>}
           </div>
           {!all && (

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { authed, body, ok } from "@/lib/api";
 import { newId } from "@/lib/auth";
-import { findAsset } from "@/lib/catalog";
+import { assetClassAvailable, findAsset } from "@/lib/catalog";
 import { query } from "@/lib/db";
 import { config } from "@/lib/env";
 import { listGoals, nextRun, UserFacingError } from "@/lib/goals";
@@ -30,6 +30,9 @@ export const POST = authed(async (req, _ctx, user) => {
   const input = await body(req, Schema);
   const asset = await findAsset(input.assetId);
   if (!asset) throw new UserFacingError("That asset isn't available to buy right now.");
+  if (!user.is_demo && !(await assetClassAvailable(asset.asset_class))) {
+    throw new UserFacingError("True Markets doesn't offer this asset from the region Jarful's servers run in. Pick a crypto asset like Solana instead.");
+  }
   const count = await query<{ c: number }>("SELECT COUNT(*)::int AS c FROM goals WHERE user_id = $1 AND status = 'active'", [user.id]);
   if (Number(count[0]?.c) >= 12) throw new UserFacingError("You can have up to 12 active jars.");
 

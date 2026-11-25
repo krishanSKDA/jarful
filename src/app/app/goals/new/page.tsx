@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { NewGoalForm } from "@/components/NewGoalForm";
+import { requireUser } from "@/lib/auth";
 import { catalog, type CatalogAsset } from "@/lib/catalog";
 import { config } from "@/lib/env";
 
@@ -7,7 +8,7 @@ export const metadata = { title: "New jar" };
 
 export default async function NewGoalPage({ searchParams }: PageProps<"/app/goals/new">) {
   const { welcome } = await searchParams;
-  const featured = await catalog("featured").catch((): CatalogAsset[] => []);
+  const [user, featured] = await Promise.all([requireUser(), catalog("featured").catch((): CatalogAsset[] => [])]);
   return (
     <div className="space-y-8">
       <div>
@@ -19,7 +20,7 @@ export default async function NewGoalPage({ searchParams }: PageProps<"/app/goal
       {featured.length === 0 ? (
         <p className="panel p-6 text-muted">The asset list isn&apos;t loading right now. Refresh the page in a minute.</p>
       ) : (
-        <NewGoalForm featured={featured} minOrder={config.minOrderUsd} maxOrder={config.maxOrderUsd} />
+        <NewGoalForm featured={featured} minOrder={config.minOrderUsd} maxOrder={config.maxOrderUsd} demo={user.is_demo} />
       )}
     </div>
   );
